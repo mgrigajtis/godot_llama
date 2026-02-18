@@ -1,0 +1,15 @@
+/bin/
+/build/
+/.scons_cache/
+/.sconsign.dblite
+/.godot/
+*.user
+*.tmp
+*.obj
+*.o
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+AGENT.MD

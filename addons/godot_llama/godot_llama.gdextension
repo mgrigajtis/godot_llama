@@ -1,0 +1,13 @@
+[configuration]
+entry_symbol = "godot_llama_library_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+linux.debug.x86_64 = "res://addons/godot_llama/bin/libgodot_llama.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/godot_llama/bin/libgodot_llama.linux.template_release.x86_64.so"
+windows.debug.x86_64 = "res://addons/godot_llama/bin/libgodot_llama.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/godot_llama/bin/libgodot_llama.windows.template_release.x86_64.dll"
+macos.debug = "res://addons/godot_llama/bin/libgodot_llama.macos.template_debug.framework"
+macos.release = "res://addons/godot_llama/bin/libgodot_llama.macos.template_release.framework"
+android.debug.arm64 = "res://addons/godot_llama/bin/libgodot_llama.android.template_debug.arm64.so"
+android.release.arm64 = "res://addons/godot_llama/bin/libgodot_llama.android.template_release.arm64.so"

@@ -1,0 +1,186 @@
+name: Build Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-windows:
+    name: Windows x86_64
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install SCons
+        run: python -m pip install --upgrade pip scons
+
+      - name: Build llama.cpp (shared)
+        shell: pwsh
+        run: |
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build_shared -DGGML_SHARED=ON -DBUILD_SHARED_LIBS=ON
+          cmake --build third_party/llama.cpp/build_shared --config Release
+
+      - name: Build GDExtension
+        shell: pwsh
+        run: |
+          $env:LLAMA_CPP_BUILD_DIR="third_party/llama.cpp/build_shared"
+          scons target=template_release platform=windows use_static_cpp=no -j4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-llama-windows-x86_64
+          path: addons/godot_llama
+          if-no-files-found: error
+
+  build-linux:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+          python -m pip install --upgrade pip scons
+
+      - name: Build llama.cpp (shared)
+        run: |
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build_shared -DGGML_SHARED=ON -DBUILD_SHARED_LIBS=ON
+          cmake --build third_party/llama.cpp/build_shared --config Release -j"$(nproc)"
+
+      - name: Build GDExtension
+        run: |
+          LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_release platform=linux use_static_cpp=no -j"$(nproc)"
+
+      - name: Copy llama runtime libs
+        run: |
+          cp -v third_party/llama.cpp/build_shared/src/libllama.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_shared/ggml/src/libggml.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_shared/ggml/src/libggml-base.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_shared/ggml/src/libggml-cpu.so* addons/godot_llama/bin/ || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-llama-linux-x86_64
+          path: addons/godot_llama
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip scons
+
+      - name: Build llama.cpp (shared)
+        run: |
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build_shared -DGGML_SHARED=ON -DBUILD_SHARED_LIBS=ON
+          cmake --build third_party/llama.cpp/build_shared --config Release -j"$(sysctl -n hw.ncpu)"
+
+      - name: Build GDExtension
+        run: |
+          LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_release platform=macos arch=arm64 use_static_cpp=no -j"$(sysctl -n hw.ncpu)"
+
+      - name: Copy llama runtime libs
+        run: |
+          cp -v third_party/llama.cpp/build_shared/src/libllama*.dylib addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_shared/ggml/src/libggml*.dylib addons/godot_llama/bin/ || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-llama-macos-arm64
+          path: addons/godot_llama
+          if-no-files-found: error
+
+  build-android:
+    name: Android arm64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+          python -m pip install --upgrade pip scons
+
+      - name: Build llama.cpp (Android arm64-v8a)
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build_android \
+            -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=24 \
+            -DGGML_SHARED=ON \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build third_party/llama.cpp/build_android --config Release -j"$(nproc)"
+
+      - name: Build GDExtension
+        env:
+          LLAMA_CPP_BUILD_DIR: third_party/llama.cpp/build_android
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_HOME: ""
+        run: |
+          scons target=template_release platform=android arch=arm64 android_api_level=24 use_static_cpp=no -j"$(nproc)"
+
+      - name: Copy llama runtime libs
+        run: |
+          cp -v third_party/llama.cpp/build_android/src/libllama.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_android/ggml/src/libggml.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_android/ggml/src/libggml-base.so* addons/godot_llama/bin/ || true
+          cp -v third_party/llama.cpp/build_android/ggml/src/libggml-cpu.so* addons/godot_llama/bin/ || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-llama-android-arm64
+          path: addons/godot_llama
+          if-no-files-found: error
