@@ -176,7 +176,7 @@ func _append_chat_turn(role: String, content: String) -> void:
         "role": role,
         "content": clean,
     })
-    var max_items := max(0, int(_history_turns_spin.value)) * 2
+    var max_items : int = max(0, int(_history_turns_spin.value)) * 2
     if max_items == 0:
         _chat_history.clear()
         return

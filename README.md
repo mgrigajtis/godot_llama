@@ -56,12 +56,31 @@ The SCons build automatically copies required runtime DLLs (`llama.dll`, `ggml.d
 - `addons/godot_llama/bin/`
 - repo root (`./`) for editor-time Windows DLL resolution.
 
+Build `llama.cpp` static libs (Linux):
+
+```bash
+cmake -S third_party/llama.cpp -B third_party/llama.cpp/build \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+cmake --build third_party/llama.cpp/build --config Release
+```
+
+Build extension (Linux):
+
+```bash
+scons target=template_debug platform=linux use_static_cpp=no -j8
+scons target=template_release platform=linux use_static_cpp=no -j8
+```
+
 Artifacts are emitted under:
 
 `addons/godot_llama/bin/`
 
 Optional override for non-default llama build output:
 - `LLAMA_CPP_BUILD_DIR` (example: `third_party/llama.cpp/build_shared`)
+- `LLAMA_CPP_LINK_STATIC=1` to force static llama.cpp linking (Linux defaults to static when the variable is unset)
+- `LLAMA_CPP_OPENMP=0` to skip linking OpenMP on Linux (use this if you built llama.cpp with `-DGGML_OPENMP=OFF`)
+- `use_static_cpp=no` is required on Linux to avoid crashes from mixing static libstdc++ with Godot's runtime
 
 ## Godot addon files
 
