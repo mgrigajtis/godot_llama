@@ -214,3 +214,85 @@ jobs:
           name: godot-llama-android-arm64
           path: addons/godot_llama
           if-no-files-found: error
+
+  package-plugin:
+    name: Package Combined Plugin
+    runs-on: ubuntu-24.04
+    needs:
+      - build-windows
+      - build-linux
+      - build-macos
+      - build-android
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-llama-windows-x86_64
+          path: artifacts/godot-llama-windows-x86_64
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-llama-linux-x86_64
+          path: artifacts/godot-llama-linux-x86_64
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-llama-macos-arm64
+          path: artifacts/godot-llama-macos-arm64
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-llama-android-arm64
+          path: artifacts/godot-llama-android-arm64
+
+      - name: Merge plugin files
+        run: |
+          set -euo pipefail
+
+          resolve_addon_dir() {
+            local root="$1"
+            if [ -d "$root/addons/godot_llama" ]; then
+              echo "$root/addons/godot_llama"
+              return
+            fi
+            if [ -d "$root/godot_llama" ]; then
+              echo "$root/godot_llama"
+              return
+            fi
+            if [ -d "$root" ] && [ -f "$root/godot_llama.gdextension" ]; then
+              echo "$root"
+              return
+            fi
+            return 1
+          }
+
+          base="$(resolve_addon_dir artifacts/godot-llama-linux-x86_64)"
+          mkdir -p package/addons/godot_llama
+          cp -a "$base"/. package/addons/godot_llama/
+
+          for artifact_root in artifacts/*; do
+            addon_dir="$(resolve_addon_dir "$artifact_root")"
+            mkdir -p package/addons/godot_llama/bin
+            if [ -d "$addon_dir/bin" ]; then
+              cp -a "$addon_dir/bin"/. package/addons/godot_llama/bin/
+            fi
+          done
+
+          test -f package/addons/godot_llama/demo/demo.tscn
+          test -f package/addons/godot_llama/demo/demo.gd
+          test -f package/addons/godot_llama/godot_llama.gdextension
+
+      - name: Create zip
+        run: |
+          cd package
+          zip -r ../godot_llama-plugin-all-platforms.zip addons/godot_llama
+
+      - name: Upload combined zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-llama-plugin-all-platforms
+          path: godot_llama-plugin-all-platforms.zip
+          if-no-files-found: error
