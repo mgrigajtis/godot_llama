@@ -44,6 +44,8 @@ if env["platform"] == "linux" and link_static_llama and not openmp_env_set:
 
 if env["platform"] == "windows":
     env.Append(LIBPATH=[
+        os.path.join(llama_build_dir, "bin", "Release"),
+        os.path.join(llama_build_dir, "lib", "Release"),
         os.path.join(llama_build_dir, "src", "Release"),
         os.path.join(llama_build_dir, "ggml", "src", "Release"),
         os.path.join(llama_build_dir, "common", "Release"),
@@ -51,6 +53,8 @@ if env["platform"] == "windows":
     env.Append(LIBS=["advapi32"])
 else:
     env.Append(LIBPATH=[
+        os.path.join(llama_build_dir, "bin"),
+        os.path.join(llama_build_dir, "lib"),
         os.path.join(llama_build_dir, "src"),
         os.path.join(llama_build_dir, "ggml", "src"),
         os.path.join(llama_build_dir, "common"),
