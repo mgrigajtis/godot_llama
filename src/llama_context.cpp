@@ -64,6 +64,7 @@ void LlamaContext::_emit_error(const String &p_message) const {
 }
 
 bool LlamaContext::_decode_tokens(const std::vector<int32_t> &p_tokens) {
+    last_decode_error = "";
     if (p_tokens.empty()) {
         return true;
     }
@@ -74,9 +75,51 @@ bool LlamaContext::_decode_tokens(const std::vector<int32_t> &p_tokens) {
         tokens.push_back(static_cast<llama_token>(p_tokens[i]));
     }
 
-    llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
-    int32_t rc = llama_decode(native_context, batch);
-    return rc == 0;
+    int32_t batch_size = static_cast<int32_t>(llama_n_batch(native_context));
+    if (batch_size <= 0) {
+        batch_size = static_cast<int32_t>(tokens.size());
+    }
+
+    size_t offset = 0;
+    while (offset < tokens.size()) {
+        const int32_t remaining = static_cast<int32_t>(tokens.size() - offset);
+        const int32_t chunk = std::min(batch_size, remaining);
+
+        std::vector<llama_pos> positions(chunk);
+        std::vector<int32_t> n_seq_id(chunk, 1);
+        std::vector<llama_seq_id> seq_ids(chunk, 0);
+        std::vector<llama_seq_id *> seq_id_ptrs(chunk);
+        std::vector<int8_t> logits(chunk, 0);
+
+        for (int32_t i = 0; i < chunk; i++) {
+            positions[i] = decode_pos + i;
+            seq_id_ptrs[i] = &seq_ids[i];
+        }
+        logits[chunk - 1] = 1;
+
+        llama_batch batch = {};
+        batch.n_tokens = chunk;
+        batch.token = tokens.data() + offset;
+        batch.pos = positions.data();
+        batch.n_seq_id = n_seq_id.data();
+        batch.seq_id = seq_id_ptrs.data();
+        batch.logits = logits.data();
+
+        int32_t rc = llama_decode(native_context, batch);
+        if (rc != 0) {
+            last_decode_error = vformat("llama_decode rc=%d offset=%d chunk=%d total=%d n_batch=%d",
+                    rc,
+                    static_cast<int32_t>(offset),
+                    chunk,
+                    static_cast<int32_t>(tokens.size()),
+                    batch_size);
+            return false;
+        }
+        offset += static_cast<size_t>(chunk);
+        decode_pos += chunk;
+    }
+
+    return true;
 }
 
 String LlamaContext::_token_to_piece(int32_t p_token) const {
@@ -108,6 +151,7 @@ Error LlamaContext::create(const Ref<LlamaModel> &p_model, const Dictionary &p_p
     }
 
     model = p_model;
+    decode_pos = 0;
     if (model.is_null() || !model->is_loaded()) {
         return ERR_UNCONFIGURED;
     }
@@ -150,18 +194,29 @@ Error LlamaContext::create(const Ref<LlamaModel> &p_model, const Dictionary &p_p
 
 void LlamaContext::reset() {
     if (native_context != nullptr) {
-        llama_memory_clear(llama_get_memory(native_context), true);
+        llama_memory_t memory = llama_get_memory(native_context);
+        if (memory != nullptr) {
+            // Remove all sequence tokens to guarantee KV slots are released.
+            llama_memory_seq_rm(memory, -1, -1, -1);
+            llama_memory_clear(memory, true);
+        }
         llama_perf_context_reset(native_context);
     }
     if (native_sampler != nullptr) {
         llama_sampler_reset(native_sampler);
     }
+    decode_pos = 0;
 }
 
 void LlamaContext::clear_kv_cache() {
     if (native_context != nullptr) {
-        llama_memory_clear(llama_get_memory(native_context), true);
+        llama_memory_t memory = llama_get_memory(native_context);
+        if (memory != nullptr) {
+            llama_memory_seq_rm(memory, -1, -1, -1);
+            llama_memory_clear(memory, true);
+        }
     }
+    decode_pos = 0;
 }
 
 void LlamaContext::set_prompt(const String &p_prompt) {
@@ -185,6 +240,24 @@ String LlamaContext::_generate_internal(int p_max_tokens, const Dictionary &p_pa
     }
     if (max_tokens <= 0) {
         return "";
+    }
+
+    bool reuse_kv = false;
+    if (p_params.has("reuse_kv")) {
+        reuse_kv = bool(p_params["reuse_kv"]);
+    }
+
+    if (!reuse_kv && native_context != nullptr) {
+        llama_memory_t memory = llama_get_memory(native_context);
+        if (memory != nullptr) {
+            const uint32_t n_seq_max = llama_n_seq_max(native_context);
+            for (uint32_t seq_id = 0; seq_id < n_seq_max; seq_id++) {
+                llama_memory_seq_rm(memory, static_cast<llama_seq_id>(seq_id), -1, -1);
+            }
+            llama_memory_seq_rm(memory, -1, -1, -1);
+            llama_memory_clear(memory, true);
+        }
+        decode_pos = 0;
     }
 
     float temperature = 0.7f;
@@ -297,8 +370,29 @@ String LlamaContext::_generate_internal(int p_max_tokens, const Dictionary &p_pa
         prompt_tokens.push_back(prompt_tokens_gd[i]);
     }
 
+    const size_t n_ctx = static_cast<size_t>(llama_n_ctx(native_context));
+    const size_t n_ctx_seq = static_cast<size_t>(llama_n_ctx_seq(native_context));
+    size_t max_prompt_tokens = n_ctx;
+    if (n_ctx_seq > 0 && (max_prompt_tokens == 0 || n_ctx_seq < max_prompt_tokens)) {
+        max_prompt_tokens = n_ctx_seq;
+    }
+    if (max_prompt_tokens > 0 && prompt_tokens.size() >= max_prompt_tokens) {
+        const size_t keep = max_prompt_tokens - 1;
+        if (keep == 0) {
+            _emit_error("Context window too small for prompt.");
+            return "";
+        }
+        const size_t drop = prompt_tokens.size() - keep;
+        prompt_tokens.erase(prompt_tokens.begin(), prompt_tokens.begin() + static_cast<ptrdiff_t>(drop));
+    }
+
     if (!_decode_tokens(prompt_tokens)) {
-        _emit_error("llama_decode failed while processing prompt.");
+        _emit_error(vformat("llama_decode failed while processing prompt. prompt_tokens=%d n_ctx=%d n_ctx_seq=%d n_batch=%d detail=%s",
+                static_cast<int32_t>(prompt_tokens.size()),
+                static_cast<int32_t>(llama_n_ctx(native_context)),
+                static_cast<int32_t>(llama_n_ctx_seq(native_context)),
+                static_cast<int32_t>(llama_n_batch(native_context)),
+                last_decode_error));
         return "";
     }
 
@@ -344,7 +438,7 @@ String LlamaContext::_generate_internal(int p_max_tokens, const Dictionary &p_pa
         llama_sampler_accept(native_sampler, token);
         std::vector<int32_t> next_token = { static_cast<int32_t>(token) };
         if (!_decode_tokens(next_token)) {
-            _emit_error("llama_decode failed while generating tokens.");
+            _emit_error(vformat("llama_decode failed while generating tokens. detail=%s", last_decode_error));
             return full_text;
         }
     }
@@ -425,6 +519,8 @@ Error LlamaContext::load_state(const PackedByteArray &p_state) {
     if (native_sampler != nullptr) {
         llama_sampler_reset(native_sampler);
     }
+    const llama_pos pos_max = llama_memory_seq_pos_max(llama_get_memory(native_context), 0);
+    decode_pos = pos_max >= 0 ? (pos_max + 1) : 0;
     return OK;
 }
 
@@ -452,6 +548,8 @@ Error LlamaContext::load_state_file(const String &p_path) {
     if (native_sampler != nullptr) {
         llama_sampler_reset(native_sampler);
     }
+    const llama_pos pos_max = llama_memory_seq_pos_max(llama_get_memory(native_context), 0);
+    decode_pos = pos_max >= 0 ? (pos_max + 1) : 0;
     return OK;
 }
 

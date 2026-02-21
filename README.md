@@ -128,6 +128,7 @@ Generation parameter keys accepted by `LlamaContext.generate(...)` / `generate_s
 - `penalty_last_n` (int)
 - `stop` (String, `Array[String]`, or `PackedStringArray`)
 - `stop_sequences` (alias for `stop`)
+- `reuse_kv` (bool, default `false`; set `true` only when intentionally continuing from current KV state)
 
 State/session helpers on `LlamaContext`:
 - `clear_kv_cache()`
