@@ -314,5 +314,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-plugin-all-platforms
-          path: package/addons
+          path: package
           if-no-files-found: error
