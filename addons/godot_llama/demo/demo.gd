@@ -5,6 +5,7 @@ var _streaming_active := false
 var _model_path := ""
 var _pending_user_text := ""
 var _chat_history: Array[Dictionary] = []
+var _saved_state_blob := PackedByteArray()
 
 const DEFAULT_SYSTEM_PROMPT := "You are Bran, a blacksmith in Oakridge. Stay in character, be concise, and be helpful. Never mention being an AI."
 const DEFAULT_WORLD_STATE_PROMPT := "World state: The bridge to Northpass is broken. The player completed quest 'Rat Cellar'."
@@ -27,6 +28,19 @@ const DEFAULT_MAX_HISTORY_TURNS := 4
 @onready var _temperature_spin: SpinBox = $MarginContainer/Scroll/VBox/GenerateRow/TemperatureSpin
 @onready var _top_p_spin: SpinBox = $MarginContainer/Scroll/VBox/GenerateRow/TopPSpin
 @onready var _streaming_check: CheckBox = $MarginContainer/Scroll/VBox/GenerateRow/StreamingCheck
+@onready var _top_k_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/TopKSpin
+@onready var _min_p_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/MinPSpin
+@onready var _repeat_penalty_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/RepeatPenaltySpin
+@onready var _frequency_penalty_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/FrequencyPenaltySpin
+@onready var _presence_penalty_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/PresencePenaltySpin
+@onready var _penalty_last_n_spin: SpinBox = $MarginContainer/Scroll/VBox/AdvancedGenerateRow/PenaltyLastNSpin
+@onready var _stop_sequences_edit: LineEdit = $MarginContainer/Scroll/VBox/StopRow/StopSequencesEdit
+@onready var _state_path_edit: LineEdit = $MarginContainer/Scroll/VBox/StateRow/StatePathEdit
+@onready var _clear_kv_button: Button = $MarginContainer/Scroll/VBox/StateRow/ClearKVButton
+@onready var _save_state_file_button: Button = $MarginContainer/Scroll/VBox/StateRow/SaveStateFileButton
+@onready var _load_state_file_button: Button = $MarginContainer/Scroll/VBox/StateRow/LoadStateFileButton
+@onready var _save_state_memory_button: Button = $MarginContainer/Scroll/VBox/StateRow/SaveStateMemoryButton
+@onready var _load_state_memory_button: Button = $MarginContainer/Scroll/VBox/StateRow/LoadStateMemoryButton
 @onready var _output_text: RichTextLabel = $MarginContainer/Scroll/VBox/OutputText
 @onready var _status_label: Label = $MarginContainer/Scroll/VBox/StatusLabel
 
@@ -42,10 +56,17 @@ func _ready() -> void:
     _create_context_button.pressed.connect(_on_create_context_pressed)
     _clear_memory_button.pressed.connect(_on_clear_memory_pressed)
     _generate_button.pressed.connect(_on_generate_pressed)
+    _clear_kv_button.pressed.connect(_on_clear_kv_pressed)
+    _save_state_file_button.pressed.connect(_on_save_state_file_pressed)
+    _load_state_file_button.pressed.connect(_on_load_state_file_pressed)
+    _save_state_memory_button.pressed.connect(_on_save_state_memory_pressed)
+    _load_state_memory_button.pressed.connect(_on_load_state_memory_pressed)
 
     _system_prompt_edit.text = DEFAULT_SYSTEM_PROMPT
     _world_state_edit.text = DEFAULT_WORLD_STATE_PROMPT
     _history_turns_spin.value = DEFAULT_MAX_HISTORY_TURNS
+    _stop_sequences_edit.text = "<|im_end|>"
+    _state_path_edit.text = "user://llama_state.session"
     _set_status("ready")
 
 func _on_select_model_pressed() -> void:
@@ -94,7 +115,16 @@ func _on_generate_pressed() -> void:
     var params := {
         "temperature": float(_temperature_spin.value),
         "top_p": float(_top_p_spin.value),
+        "top_k": int(_top_k_spin.value),
+        "min_p": float(_min_p_spin.value),
+        "repeat_penalty": float(_repeat_penalty_spin.value),
+        "frequency_penalty": float(_frequency_penalty_spin.value),
+        "presence_penalty": float(_presence_penalty_spin.value),
+        "penalty_last_n": int(_penalty_last_n_spin.value),
     }
+    var stop_sequences := _parse_stop_sequences(_stop_sequences_edit.text)
+    if not stop_sequences.is_empty():
+        params["stop_sequences"] = stop_sequences
 
     _output_text.clear()
     _pending_user_text = user_text
@@ -117,6 +147,64 @@ func _on_clear_memory_pressed() -> void:
     _chat_history.clear()
     _pending_user_text = ""
     _set_status("memory cleared")
+
+func _on_clear_kv_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("context not initialized")
+        return
+    _llama.context.clear_kv_cache()
+    _set_status("kv cache cleared")
+
+func _on_save_state_file_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("context not initialized")
+        return
+    var path := _state_path_edit.text.strip_edges()
+    if path.is_empty():
+        _set_status("state path is empty")
+        return
+    var err := _llama.context.save_state_file(path)
+    if err != OK:
+        _set_status("save state file failed: %s" % error_string(err))
+        return
+    _set_status("state saved to %s" % path)
+
+func _on_load_state_file_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("context not initialized")
+        return
+    var path := _state_path_edit.text.strip_edges()
+    if path.is_empty():
+        _set_status("state path is empty")
+        return
+    var err := _llama.context.load_state_file(path)
+    if err != OK:
+        _set_status("load state file failed: %s" % error_string(err))
+        return
+    _set_status("state loaded from %s" % path)
+
+func _on_save_state_memory_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("context not initialized")
+        return
+    _saved_state_blob = _llama.context.save_state()
+    if _saved_state_blob.is_empty():
+        _set_status("save state blob failed")
+        return
+    _set_status("state blob saved (%d bytes)" % _saved_state_blob.size())
+
+func _on_load_state_memory_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("context not initialized")
+        return
+    if _saved_state_blob.is_empty():
+        _set_status("no saved state blob")
+        return
+    var err := _llama.context.load_state(_saved_state_blob)
+    if err != OK:
+        _set_status("load state blob failed: %s" % error_string(err))
+        return
+    _set_status("state blob loaded")
 
 func _on_token_generated(token_text: String, _token_id: int) -> void:
     if _streaming_active:
@@ -198,3 +286,12 @@ func _clean_assistant_output(text: String) -> String:
     out = out.replace("<|im_end>", "")
     out = out.replace("<|endoftext|>", "")
     return out.strip_edges()
+
+func _parse_stop_sequences(raw: String) -> PackedStringArray:
+    var stops := PackedStringArray()
+    var parts := raw.split(",")
+    for part in parts:
+        var clean := String(part).strip_edges()
+        if not clean.is_empty():
+            stops.append(clean)
+    return stops

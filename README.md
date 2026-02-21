@@ -102,10 +102,36 @@ To run the demo:
 4. Click `Select Model...` and choose a `.gguf` file.
 5. Click `Load Model`, then `Create Context`.
 6. Set `System prompt`, `World state`, and `history_turns` as needed.
-7. Enter a player prompt and click `Generate`.
+7. Optionally tune advanced generation controls: `top_k`, `min_p`, repetition/presence/frequency penalties, `penalty_last_n`, and comma-separated stop sequences.
+8. Use state controls when needed:
+   - `Clear KV` clears context cache.
+   - `Save File` / `Load File` persist and restore context state at the provided `state path` (for example `user://llama_state.session`).
+   - `Save Blob` / `Load Blob` save and restore state in memory.
+9. Enter a player prompt and click `Generate`.
 
 Recommended starting settings for NPC dialog:
 - `n_ctx`: `1024` or `2048`
 - `temperature`: `0.6` to `0.8`
 - `top_p`: `0.85` to `0.95`
 - `max_tokens`: `80` to `160`
+
+Generation parameter keys accepted by `LlamaContext.generate(...)` / `generate_stream(...)`:
+- `max_tokens` (int)
+- `temperature` (float)
+- `top_k` (int)
+- `top_p` (float)
+- `min_p` (float)
+- `seed` (int)
+- `repeat_penalty` (float)
+- `frequency_penalty` (float)
+- `presence_penalty` (float)
+- `penalty_last_n` (int)
+- `stop` (String, `Array[String]`, or `PackedStringArray`)
+- `stop_sequences` (alias for `stop`)
+
+State/session helpers on `LlamaContext`:
+- `clear_kv_cache()`
+- `save_state() -> PackedByteArray`
+- `load_state(state: PackedByteArray) -> Error`
+- `save_state_file(path: String) -> Error`
+- `load_state_file(path: String) -> Error`

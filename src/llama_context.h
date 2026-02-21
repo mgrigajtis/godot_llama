@@ -5,6 +5,7 @@
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <vector>
 
@@ -38,11 +39,16 @@ public:
 
     Error create(const Ref<LlamaModel> &p_model, const Dictionary &p_params = Dictionary());
     void reset();
+    void clear_kv_cache();
     void set_prompt(const String &p_prompt);
     String generate(int p_max_tokens = 128, const Dictionary &p_params = Dictionary());
     void generate_stream(int p_max_tokens = 128, const Dictionary &p_params = Dictionary());
     void cancel();
     Dictionary get_stats() const;
+    PackedByteArray save_state();
+    Error load_state(const PackedByteArray &p_state);
+    Error save_state_file(const String &p_path);
+    Error load_state_file(const String &p_path);
 
     Ref<LlamaModel> get_model() const;
     String get_prompt() const;

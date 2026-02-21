@@ -187,6 +187,122 @@ layout_mode = 2
 button_pressed = true
 text = "Stream"
 
+[node name="AdvancedGenerateRow" type="HBoxContainer" parent="MarginContainer/Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TopKLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "top_k"
+
+[node name="TopKSpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 40.0
+min_value = 0.0
+max_value = 200.0
+step = 1.0
+
+[node name="MinPLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "min_p"
+
+[node name="MinPSpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 0.0
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+
+[node name="RepeatPenaltyLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "repeat_penalty"
+
+[node name="RepeatPenaltySpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 1.0
+min_value = 0.5
+max_value = 2.0
+step = 0.01
+
+[node name="FrequencyPenaltyLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "freq_penalty"
+
+[node name="FrequencyPenaltySpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 0.0
+min_value = -2.0
+max_value = 2.0
+step = 0.01
+
+[node name="PresencePenaltyLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "pres_penalty"
+
+[node name="PresencePenaltySpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 0.0
+min_value = -2.0
+max_value = 2.0
+step = 0.01
+
+[node name="PenaltyLastNLabel" type="Label" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+text = "penalty_last_n"
+
+[node name="PenaltyLastNSpin" type="SpinBox" parent="MarginContainer/Scroll/VBox/AdvancedGenerateRow"]
+layout_mode = 2
+value = 64.0
+min_value = -1.0
+max_value = 2048.0
+step = 1.0
+
+[node name="StopRow" type="HBoxContainer" parent="MarginContainer/Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StopSequencesLabel" type="Label" parent="MarginContainer/Scroll/VBox/StopRow"]
+layout_mode = 2
+text = "stop sequences"
+
+[node name="StopSequencesEdit" type="LineEdit" parent="MarginContainer/Scroll/VBox/StopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Comma-separated, e.g. <|im_end|>,\\nUser:"
+
+[node name="StateRow" type="HBoxContainer" parent="MarginContainer/Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatePathLabel" type="Label" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "state path"
+
+[node name="StatePathEdit" type="LineEdit" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "user://llama_state.session"
+
+[node name="ClearKVButton" type="Button" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "Clear KV"
+
+[node name="SaveStateFileButton" type="Button" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "Save File"
+
+[node name="LoadStateFileButton" type="Button" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "Load File"
+
+[node name="SaveStateMemoryButton" type="Button" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "Save Blob"
+
+[node name="LoadStateMemoryButton" type="Button" parent="MarginContainer/Scroll/VBox/StateRow"]
+layout_mode = 2
+text = "Load Blob"
+
 [node name="OutputLabel" type="Label" parent="MarginContainer/Scroll/VBox"]
 layout_mode = 2
 text = "Output"

@@ -44,11 +44,14 @@ jobs:
           $env:LLAMA_CPP_BUILD_DIR="third_party/llama.cpp/build_shared"
           scons target=template_release platform=windows use_static_cpp=no -j4
 
+      - name: Create artifact zip
+        run: python -m zipfile -c godot-llama-windows-x86_64.zip addons/godot_llama
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-windows-x86_64
-          path: addons/godot_llama
+          path: godot-llama-windows-x86_64.zip
           if-no-files-found: error
 
   build-linux:
@@ -95,11 +98,14 @@ jobs:
           cp -v third_party/llama.cpp/build_shared/ggml/src/libggml-base.so* addons/godot_llama/bin/ || true
           cp -v third_party/llama.cpp/build_shared/ggml/src/libggml-cpu.so* addons/godot_llama/bin/ || true
 
+      - name: Create artifact zip
+        run: python -m zipfile -c godot-llama-linux-x86_64.zip addons/godot_llama
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-linux-x86_64
-          path: addons/godot_llama
+          path: godot-llama-linux-x86_64.zip
           if-no-files-found: error
 
   build-macos:
@@ -142,11 +148,14 @@ jobs:
           cp -v third_party/llama.cpp/build_shared/src/libllama*.dylib addons/godot_llama/bin/ || true
           cp -v third_party/llama.cpp/build_shared/ggml/src/libggml*.dylib addons/godot_llama/bin/ || true
 
+      - name: Create artifact zip
+        run: python -m zipfile -c godot-llama-macos-arm64.zip addons/godot_llama
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-macos-arm64
-          path: addons/godot_llama
+          path: godot-llama-macos-arm64.zip
           if-no-files-found: error
 
   build-android:
@@ -208,11 +217,14 @@ jobs:
           cp -v third_party/llama.cpp/build_android/ggml/src/libggml-base.so* addons/godot_llama/bin/ || true
           cp -v third_party/llama.cpp/build_android/ggml/src/libggml-cpu.so* addons/godot_llama/bin/ || true
 
+      - name: Create artifact zip
+        run: python -m zipfile -c godot-llama-android-arm64.zip addons/godot_llama
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-android-arm64
-          path: addons/godot_llama
+          path: godot-llama-android-arm64.zip
           if-no-files-found: error
 
   package-plugin:
@@ -269,11 +281,20 @@ jobs:
             return 1
           }
 
-          base="$(resolve_addon_dir artifacts/godot-llama-linux-x86_64)"
+          mkdir -p extracted
+          for artifact_root in artifacts/*; do
+            zip_path="$(find "$artifact_root" -maxdepth 1 -type f -name '*.zip' | head -n1)"
+            test -n "$zip_path"
+            name="$(basename "$artifact_root")"
+            mkdir -p "extracted/$name"
+            unzip -q "$zip_path" -d "extracted/$name"
+          done
+
+          base="$(resolve_addon_dir extracted/godot-llama-linux-x86_64)"
           mkdir -p package/addons/godot_llama
           cp -a "$base"/. package/addons/godot_llama/
 
-          for artifact_root in artifacts/*; do
+          for artifact_root in extracted/*; do
             addon_dir="$(resolve_addon_dir "$artifact_root")"
             mkdir -p package/addons/godot_llama/bin
             if [ -d "$addon_dir/bin" ]; then
