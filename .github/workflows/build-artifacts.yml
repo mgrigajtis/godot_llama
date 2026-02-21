@@ -42,6 +42,7 @@ jobs:
         shell: pwsh
         run: |
           $env:LLAMA_CPP_BUILD_DIR="third_party/llama.cpp/build_shared"
+          scons target=template_debug platform=windows use_static_cpp=no -j4
           scons target=template_release platform=windows use_static_cpp=no -j4
 
       - name: Stage artifact payload
@@ -92,6 +93,7 @@ jobs:
 
       - name: Build GDExtension
         run: |
+          LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_debug platform=linux use_static_cpp=no -j"$(nproc)"
           LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_release platform=linux use_static_cpp=no -j"$(nproc)"
 
       - name: Copy llama runtime libs
@@ -146,6 +148,7 @@ jobs:
 
       - name: Build GDExtension
         run: |
+          LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_debug platform=macos arch=arm64 use_static_cpp=no -j"$(sysctl -n hw.ncpu)"
           LLAMA_CPP_BUILD_DIR=third_party/llama.cpp/build_shared scons target=template_release platform=macos arch=arm64 use_static_cpp=no -j"$(sysctl -n hw.ncpu)"
 
       - name: Copy llama runtime libs
@@ -215,6 +218,7 @@ jobs:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_HOME: ""
         run: |
+          scons target=template_debug platform=android arch=arm64 android_api_level=24 use_static_cpp=no -j"$(nproc)"
           scons target=template_release platform=android arch=arm64 android_api_level=24 use_static_cpp=no -j"$(nproc)"
 
       - name: Copy llama runtime libs
@@ -306,14 +310,9 @@ jobs:
           test -f package/addons/godot_llama/demo/demo.gd
           test -f package/addons/godot_llama/godot_llama.gdextension
 
-      - name: Create zip
-        run: |
-          cd package
-          zip -r ../godot_llama-plugin-all-platforms.zip addons/godot_llama
-
-      - name: Upload combined zip
+      - name: Upload combined artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-llama-plugin-all-platforms
-          path: godot_llama-plugin-all-platforms.zip
+          path: package/addons
           if-no-files-found: error

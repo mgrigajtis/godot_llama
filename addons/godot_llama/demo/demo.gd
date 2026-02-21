@@ -105,10 +105,17 @@ func _on_create_context_pressed() -> void:
     _set_status("context ready")
 
 func _on_generate_pressed() -> void:
+    if not _llama.context.is_initialized():
+        _set_status("create context first")
+        return
+
     var user_text := _prompt_edit.text.strip_edges()
     if user_text.is_empty():
         _set_status("prompt is empty")
         return
+
+    # The demo rebuilds the full conversation prompt each turn, so reset context first.
+    _llama.context.reset()
 
     var prompt := _build_chat_prompt(user_text)
     var max_tokens := int(_max_tokens_spin.value)
